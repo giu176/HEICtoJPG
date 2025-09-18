@@ -24,6 +24,8 @@ for %%I in ("%DESTINATION%") do set "DESTINATION=%%~fI"
 if not "%SOURCE:~-1%"=="\" set "SOURCE=%SOURCE%\"
 if not "%DESTINATION:~-1%"=="\" set "DESTINATION=%DESTINATION%\"
 
+call :strlen "%SOURCE%" SOURCE_LEN
+
 call :resolveConverter "%REQUESTED_CONVERTER%" CONVERTER || exit /b 1
 
 if not exist "%DESTINATION%" md "%DESTINATION%"
@@ -34,7 +36,7 @@ set "hadError=0"
 for /r "%SOURCE%" %%F in (*.heic) do (
     set "inputFile=%%~fF"
     set "relativeDir=%%~dpF"
-    set "relativeDir=!relativeDir:%SOURCE%=!"
+    set "relativeDir=!relativeDir:~%SOURCE_LEN%!"
     set "targetDir=%DESTINATION%!relativeDir!"
     if not exist "!targetDir!" md "!targetDir!"
     set "targetFile=!targetDir!%%~nF.jpg"
@@ -60,6 +62,19 @@ if %processed%==0 (
 )
 
 exit /b %hadError%
+
+:strlen
+setlocal EnableExtensions EnableDelayedExpansion
+set "str=%~1"
+set /a len=0
+:strlen_loop
+if defined str (
+    set "str=!str:~1!"
+    set /a len+=1
+    goto :strlen_loop
+)
+endlocal & set "%~2=%len%"
+exit /b 0
 
 :resolveConverter
 set "requested=%~1"
