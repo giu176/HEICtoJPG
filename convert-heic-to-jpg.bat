@@ -69,6 +69,12 @@ if exist "%requested%" (
     set "resolved=%requested%"
 ) else (
     for %%I in ("%requested%") do set "resolved=%%~$PATH:I"
+    if not defined resolved (
+        where "%requested%" >nul 2>nul
+        if not errorlevel 1 (
+            set "resolved=%requested%"
+        )
+    )
 )
 if not defined resolved (
     echo Converter "%requested%" was not found. Install it or supply the full path as the third argument.
