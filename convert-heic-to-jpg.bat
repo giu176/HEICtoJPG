@@ -1,29 +1,66 @@
-@@ -39,52 39,62 @@ for /r "%SOURCE%" %%F in (*.heic) do (
-     if not exist "!targetDir!" md "!targetDir!"
-     set "targetFile=!targetDir!%%~nF.jpg"
-     if exist "!targetFile!" (
-         echo Skipping "!targetFile!" (already exists)
-     ) else (
-         echo Converting: "%%~fF"
-         "!CONVERTER!" "%%~fF" "!targetFile!"
-         if errorlevel 1 (
-             echo Failed to convert "%%~fF"
-             set "hadError=1"
-         ) else (
-             echo   -^> "!targetFile!"
-             set /a processed=1 >nul
-         )
-     )
- )
- 
- if %processed%==0 (
-     echo No HEIC files were found under "%SOURCE%".
- ) else (
-     echo Converted %processed% file^(s^).
- )
- 
- exit /b %hadError%
- 
+@echo off
+setlocal EnableExtensions EnableDelayedExpansion
+
+if "%~1"=="" (
+    call :usage
+    exit /b 1
+)
+
+set "SOURCE=%~1"
+set "DESTINATION=%~2"
+set "REQUESTED_CONVERTER=%~3"
+
+if not exist "%SOURCE%" (
+    echo Source directory "%SOURCE%" was not found.
+    exit /b 1
+)
+
+if not defined DESTINATION set "DESTINATION=%SOURCE%"
+if not defined REQUESTED_CONVERTER set "REQUESTED_CONVERTER=magick"
+
+for %%I in ("%SOURCE%") do set "SOURCE=%%~fI"
+for %%I in ("%DESTINATION%") do set "DESTINATION=%%~fI"
+
+if not "%SOURCE:~-1%"=="\" set "SOURCE=%SOURCE%\"
+if not "%DESTINATION:~-1%"=="\" set "DESTINATION=%DESTINATION%\"
+
+call :resolveConverter "%REQUESTED_CONVERTER%" CONVERTER || exit /b 1
+
+if not exist "%DESTINATION%" md "%DESTINATION%"
+
+set "processed=0"
+set "hadError=0"
+
+for /r "%SOURCE%" %%F in (*.heic) do (
+    set "inputFile=%%~fF"
+    set "relativeDir=%%~dpF"
+    set "relativeDir=!relativeDir:%SOURCE%=!"
+    set "targetDir=%DESTINATION%!relativeDir!"
+    if not exist "!targetDir!" md "!targetDir!"
+    set "targetFile=!targetDir!%%~nF.jpg"
+    if exist "!targetFile!" (
+        echo Skipping "!targetFile!" (already exists)
+    ) else (
+        echo Converting: "%%~fF"
+        "!CONVERTER!" "%%~fF" "!targetFile!"
+        if errorlevel 1 (
+            echo Failed to convert "%%~fF"
+            set "hadError=1"
+        ) else (
+            echo   -> "!targetFile!"
+            set /a processed+=1 >nul
+        )
+    )
+)
+
+if %processed%==0 (
+    echo No HEIC files were found under "%SOURCE%".
+) else (
+    echo Converted %processed% file^(s^).
+)
+
+exit /b %hadError%
+
 :resolveConverter
 set "requested=%~1"
 set "outputVar=%~2"
@@ -32,99 +69,31 @@ if exist "%requested%" (
     set "resolved=%requested%"
     goto :resolvedDone
 )
-for %%I in ("%requested%") do set "resolved=%%~$PATH:I"
-if defined resolved goto :resolvedDone
-where "%requested%" >nul 2>nul
-if errorlevel 1 goto :missingConverter
+for %%I in ("%requested%") do if not "%%~$PATH:I"=="" (
+    set "resolved=%%~$PATH:I"
+    goto :resolvedDone
+)
 for /f "delims=" %%I in ('where "%requested%" 2^>nul') do (
     set "resolved=%%I"
     goto :resolvedDone
 )
-set "resolved=%requested%"
-:resolvedDone
 if not defined resolved goto :missingConverter
+:resolvedDone
 set "%outputVar%=%resolved%"
 exit /b 0
 
 :missingConverter
 echo Converter "%requested%" was not found. Install it or supply the full path as the third argument.
 exit /b 1
- 
- :usage
- echo Usage: %~nx0 SOURCE_DIR [DEST_DIR] [CONVERTER]
- echo.
- echo   SOURCE_DIR  Root folder containing HEIC images.
- echo   DEST_DIR    Where to place converted JPG files. Defaults to SOURCE_DIR.
- echo   CONVERTER   Optional command or full path used for conversion.
- echo                Defaults to "magick" (ImageMagick 7).
- echo.
- echo Example:
- "%~nx0" "C:\Photos\HEIC" "C:\Photos\JPG" magick
- exit /b 0
-diff --git a/convert-heic-to-jpg.bat b/convert-heic-to-jpg.bat
-index f06c5fd3c2c7cf954145f85b2d308d61c0693c13..535cb4cd0f888c25f78b6050b491e7de6f4d3df1 100644
---- a/convert-heic-to-jpg.bat
- b/convert-heic-to-jpg.bat
-@@ -39,52 39,62 @@ for /r "%SOURCE%" %%F in (*.heic) do (
-     if not exist "!targetDir!" md "!targetDir!"
-     set "targetFile=!targetDir!%%~nF.jpg"
-     if exist "!targetFile!" (
-         echo Skipping "!targetFile!" (already exists)
-     ) else (
-         echo Converting: "%%~fF"
-         "!CONVERTER!" "%%~fF" "!targetFile!"
-         if errorlevel 1 (
-             echo Failed to convert "%%~fF"
-             set "hadError=1"
-         ) else (
-             echo   -^> "!targetFile!"
-             set /a processed=1 >nul
-         )
-     )
- )
- 
- if %processed%==0 (
-     echo No HEIC files were found under "%SOURCE%".
- ) else (
-     echo Converted %processed% file^(s^).
- )
- 
- exit /b %hadError%
- 
-:resolveConverter
-set "requested=%~1"
-set "outputVar=%~2"
-set "resolved="
-if exist "%requested%" (
-    set "resolved=%requested%"
-    goto :resolvedDone
-)
-for %%I in ("%requested%") do set "resolved=%%~$PATH:I"
-if defined resolved goto :resolvedDone
-where "%requested%" >nul 2>nul
-if errorlevel 1 goto :missingConverter
-for /f "delims=" %%I in ('where "%requested%" 2^>nul') do (
-    set "resolved=%%I"
-    goto :resolvedDone
-)
-set "resolved=%requested%"
-:resolvedDone
-if not defined resolved goto :missingConverter
-set "%outputVar%=%resolved%"
-exit /b 0
 
-:missingConverter
-echo Converter "%requested%" was not found. Install it or supply the full path as the third argument.
-exit /b 1
- 
- :usage
- echo Usage: %~nx0 SOURCE_DIR [DEST_DIR] [CONVERTER]
- echo.
- echo   SOURCE_DIR  Root folder containing HEIC images.
- echo   DEST_DIR    Where to place converted JPG files. Defaults to SOURCE_DIR.
- echo   CONVERTER   Optional command or full path used for conversion.
- echo                Defaults to "magick" (ImageMagick 7).
- echo.
- echo Example:
- "%~nx0" "C:\Photos\HEIC" "C:\Photos\JPG" magick
- exit /b 0
+:usage
+echo Usage: %~nx0 SOURCE_DIR [DEST_DIR] [CONVERTER]
+echo.
+echo   SOURCE_DIR  Root folder containing HEIC images.
+echo   DEST_DIR    Where to place converted JPG files. Defaults to SOURCE_DIR.
+echo   CONVERTER   Optional command or full path used for conversion.
+echo                Defaults to "magick" (ImageMagick 7).
+echo.
+echo Example:
+echo "%~nx0" "C:\Photos\HEIC" "C:\Photos\JPG" magick
+exit /b 0
