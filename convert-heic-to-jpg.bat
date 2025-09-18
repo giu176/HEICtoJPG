@@ -26,7 +26,12 @@ if not "%DESTINATION:~-1%"=="\" set "DESTINATION=%DESTINATION%\"
 
 call :strlen "%SOURCE%" SOURCE_LEN
 
+codex/fix-corrupted-jpg-file-creation-iwv98e
 call :resolveConverter "%REQUESTED_CONVERTER%" CONVERTER || exit /b 1
+call :classifyConverter "%CONVERTER%" CONVERTER_KIND
+set "HAS_POWERSHELL=0"
+if /i "%CONVERTER_KIND%"=="magick" call :detectPowershell HAS_POWERSHELL
+
 
 if not exist "%DESTINATION%" md "%DESTINATION%"
 
@@ -44,7 +49,7 @@ for /r "%SOURCE%" %%F in (*.heic) do (
         echo Skipping "!targetFile!" ^(already exists^)
     ) else (
         echo Converting: "%%~fF"
-        "!CONVERTER!" "%%~fF" "!targetFile!"
+        call :runConversion "%%~fF" "!targetFile!" "!CONVERTER_KIND!"
         if errorlevel 1 (
             echo Failed to convert "%%~fF"
             set "hadError=1"
@@ -76,10 +81,36 @@ if defined str (
 endlocal & set "%~2=%len%"
 exit /b 0
 
+codex/fix-corrupted-jpg-file-creation-iwv98e
+:runConversion
+setlocal EnableExtensions EnableDelayedExpansion
+set "input=%~1"
+set "output=%~2"
+set "mode=%~3"
+if /i "!mode!"=="magick" (
+    "!CONVERTER!" convert "!input!" "!output!"
+) else (
+    "!CONVERTER!" "!input!" "!output!"
+)
+set "status=%errorlevel%"
+if not "!status!"=="0" goto runConversion_cleanup
+if not exist "!output!" set "status=1" & goto runConversion_cleanup
+for %%I in ("!output!") do set "size=%%~zI"
+if not defined size set "status=1" & goto runConversion_cleanup
+if !size! lss 4 set "status=1" & goto runConversion_cleanup
+if /i "!mode!"=="magick" if "!HAS_POWERSHELL!"=="1" (
+    powershell -NoProfile -Command "$path = [System.IO.Path]::GetFullPath(\"!output!\"); try { $fs = [System.IO.File]::OpenRead($path); $buffer = New-Object byte[] 4; $bytesRead = $fs.Read($buffer, 0, 4); if ($bytesRead -lt 4) { $fs.Close(); exit 1 }; $null = $fs.Seek(-2, [System.IO.SeekOrigin]::End); $tail = New-Object byte[] 2; $null = $fs.Read($tail, 0, 2); $fs.Close(); if ($buffer[0] -ne 0xFF -or $buffer[1] -ne 0xD8 -or $tail[0] -ne 0xFF -or $tail[1] -ne 0xD9) { exit 1 } } catch { exit 1 }" >nul 2>&1
+    if errorlevel 1 set "status=1"
+)
+:runConversion_cleanup
+if not "!status!"=="0" if exist "!output!" del /f /q "!output!" >nul 2>&1
+endlocal & exit /b %status%
+
 :resolveConverter
 set "requested=%~1"
 set "outputVar=%~2"
 set "resolved="
+
 if exist "%requested%" (
     set "resolved=%requested%"
     goto :resolvedDone
@@ -95,6 +126,28 @@ for /f "delims=" %%I in ('where "%requested%" 2^>nul') do (
 if not defined resolved goto :missingConverter
 :resolvedDone
 set "%outputVar%=%resolved%"
+exit /b 0
+
+:classifyConverter
+setlocal EnableExtensions EnableDelayedExpansion
+set "resolved=%~1"
+set "outputVar=%~2"
+set "kind=generic"
+for %%I in ("!resolved!") do (
+    set "candidate=%%~nxI"
+    if /i "!candidate!"=="magick.exe" set "kind=magick"
+    if /i "!candidate!"=="magick.com" set "kind=magick"
+    if /i "!candidate!"=="magick" set "kind=magick"
+)
+endlocal & set "%outputVar%=%kind%"
+exit /b 0
+
+:detectPowershell
+setlocal EnableExtensions EnableDelayedExpansion
+powershell -NoProfile -Command "exit 0" >nul 2>&1
+set "available=0"
+if not errorlevel 1 set "available=1"
+endlocal & set "%~1=%available%"
 exit /b 0
 
 :missingConverter
