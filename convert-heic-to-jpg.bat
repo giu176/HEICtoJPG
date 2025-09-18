@@ -39,7 +39,7 @@ for /r "%SOURCE%" %%F in (*.heic) do (
     if not exist "!targetDir!" md "!targetDir!"
     set "targetFile=!targetDir!%%~nF.jpg"
     if exist "!targetFile!" (
-        echo Skipping "!targetFile!" (already exists)
+        echo Skipping "!targetFile!" ^(already exists^)
     ) else (
         echo Converting: "%%~fF"
         "!CONVERTER!" "%%~fF" "!targetFile!"
