@@ -22,6 +22,7 @@ set "INROOT_UP=%INROOT%"
 call :ToUpper INROOT_UP
 call :StrLen INLEN "%INROOT%"
 
+
 rem Verifica esistenza input
 if not exist "%INROOT%" (
   echo Errore: cartella input non trovata: "%INROOT%"
@@ -37,6 +38,7 @@ if errorlevel 1 (
 
 rem Assicurati che la cartella di output esista
 if not exist "%OUTROOT%" mkdir "%OUTROOT%" >nul 2>&1
+
 
 echo === Conversione .HEIC -> .jpg ===
 echo Input : "%INROOT%"
@@ -54,6 +56,7 @@ for /R "%INROOT%" %%F in (*.HEIC *.heic) do (
   rem Calcola percorso relativo rimuovendo la radice input (ignorando il case)
   set "RELPN=!SRCFULL!"
   if "!SRCFULL_UP:~0,%INLEN%!"=="%INROOT_UP%" set "RELPN=!SRCFULL:~%INLEN%!"
+
   if "!RELPN:~0,1!"=="\" set "RELPN=!RELPN:~1!"
 
   rem Costruisci destinazione: OUTROOT + relativo + .jpg
@@ -96,3 +99,4 @@ if defined _STR (
 )
 endlocal & set "%~1=%_LEN%"
 exit /b
+
