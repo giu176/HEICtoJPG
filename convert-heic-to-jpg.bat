@@ -51,29 +51,28 @@ exit /b %hadError%
 set "requested=%~1"
 set "outputVar=%~2"
 set "resolved="
-
 if exist "%requested%" (
     set "resolved=%requested%"
     goto :resolvedDone
 )
-
 for %%I in ("%requested%") do set "resolved=%%~$PATH:I"
 if defined resolved goto :resolvedDone
-
 where "%requested%" >nul 2>nul
 if errorlevel 1 goto :missingConverter
-
 for /f "delims=" %%I in ('where "%requested%" 2^>nul') do (
     set "resolved=%%I"
     goto :resolvedDone
 )
-
 set "resolved=%requested%"
-
 :resolvedDone
 if not defined resolved goto :missingConverter
 set "%outputVar%=%resolved%"
 exit /b 0
+
+:missingConverter
+echo Converter "%requested%" was not found. Install it or supply the full path as the third argument.
+exit /b 1
+
 
 :missingConverter
 echo Converter "%requested%" was not found. Install it or supply the full path as the third argument.
