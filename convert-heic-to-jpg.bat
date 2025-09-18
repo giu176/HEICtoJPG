@@ -26,10 +26,12 @@ if not "%DESTINATION:~-1%"=="\" set "DESTINATION=%DESTINATION%\"
 
 call :strlen "%SOURCE%" SOURCE_LEN
 
+codex/fix-corrupted-jpg-file-creation-iwv98e
 call :resolveConverter "%REQUESTED_CONVERTER%" CONVERTER || exit /b 1
 call :classifyConverter "%CONVERTER%" CONVERTER_KIND
 set "HAS_POWERSHELL=0"
 if /i "%CONVERTER_KIND%"=="magick" call :detectPowershell HAS_POWERSHELL
+
 
 if not exist "%DESTINATION%" md "%DESTINATION%"
 
@@ -79,6 +81,7 @@ if defined str (
 endlocal & set "%~2=%len%"
 exit /b 0
 
+codex/fix-corrupted-jpg-file-creation-iwv98e
 :runConversion
 setlocal EnableExtensions EnableDelayedExpansion
 set "input=%~1"
@@ -107,6 +110,7 @@ endlocal & exit /b %status%
 set "requested=%~1"
 set "outputVar=%~2"
 set "resolved="
+
 if exist "%requested%" (
     set "resolved=%requested%"
     goto :resolvedDone
