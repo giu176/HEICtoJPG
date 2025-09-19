@@ -24,13 +24,6 @@ The script performs the following steps:
 
 All worker processes share a lightweight lock directory to ensure no more than the configured number of jobs run concurrently. If any conversion fails the script reports an error once all background jobs finish.
 
-## Tips
-
-- Run the script from an elevated prompt if the destination directory requires additional permissions.
-- If you want to preserve the original HEIC files, remove the line that deletes `"%SOURCE_FILE%"` after the conversion in the `:Worker` label before running the script.
-- The `_jpg` directory can safely be deleted and recreated if you need to run the conversion again.
-- Pass `--delete-source` to remove the original source directory after a successful conversion if you only want the JPG copies.
-
 ## Troubleshooting
 
 - **`Converter "magick" not found in PATH`** – confirm ImageMagick is installed and the folder containing `magick.exe` is included in the `PATH` environment variable.
