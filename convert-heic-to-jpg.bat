@@ -7,7 +7,7 @@ if /i "%~1"=="_worker" (
 )
 
 if "%~1"=="" (
-    echo Usage: %~nx0 SOURCE_DIR
+    echo Usage: %~nx0 SOURCE_DIR [--delete-source]
     echo.
     echo Creates a "_jpg" copy of SOURCE_DIR and converts all HEIC files to JPG in parallel.
     exit /b 1
@@ -17,6 +17,16 @@ set "SOURCE=%~f1"
 if not exist "%SOURCE%" (
     echo [ERROR] Source directory "%SOURCE%" not found.
     exit /b 1
+)
+
+set "DELETE_SOURCE=0"
+if not "%~2"=="" (
+    if /i "%~2"=="--delete-source" (
+        set "DELETE_SOURCE=1"
+    ) else (
+        echo [ERROR] Unknown option "%~2".
+        exit /b 1
+    )
 )
 
 for %%I in ("%SOURCE%") do set "DEST=%%~fI_jpg"
@@ -85,6 +95,15 @@ if "!HAS_FILES!"=="0" (
         echo [ERROR] Conversion completed with errors. Check messages above.
     ) else (
         echo [INFO] Conversion completed successfully.
+        if "%DELETE_SOURCE%"=="1" (
+            echo [INFO] Deleting original source directory "%SOURCE%"...
+            rd /s /q "%SOURCE%"
+            if errorlevel 1 (
+                echo [WARN] Failed to delete "%SOURCE%". Please remove it manually.
+            ) else (
+                echo [INFO] Original source directory deleted.
+            )
+        )
     )
 )
 
