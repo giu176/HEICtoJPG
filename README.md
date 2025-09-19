@@ -11,7 +11,7 @@ This repository provides a Windows batch script that mirrors a directory tree an
 ## Usage
 
 ```batch
-convert-heic-to-jpg.bat "C:\path\to\source"
+convert-heic-to-jpg.bat "C:\path\to\source" [--delete-source]
 ```
 
 The script performs the following steps:
@@ -20,6 +20,7 @@ The script performs the following steps:
 2. Creates a mirror of the directory named `<source>_jpg` using `robocopy`.
 3. Finds each `.HEIC` file within the mirrored directory and starts a background worker to convert the file to `.jpg`.
 4. Removes the original `.HEIC` file after a successful conversion. If the `.jpg` already exists it skips conversion and deletes the duplicate `.HEIC` copy.
+5. Optionally deletes the original source directory when the `--delete-source` flag is supplied.
 
 All worker processes share a lightweight lock directory to ensure no more than the configured number of jobs run concurrently. If any conversion fails the script reports an error once all background jobs finish.
 
@@ -28,6 +29,7 @@ All worker processes share a lightweight lock directory to ensure no more than t
 - Run the script from an elevated prompt if the destination directory requires additional permissions.
 - If you want to preserve the original HEIC files, remove the line that deletes `"%SOURCE_FILE%"` after the conversion in the `:Worker` label before running the script.
 - The `_jpg` directory can safely be deleted and recreated if you need to run the conversion again.
+- Pass `--delete-source` to remove the original source directory after a successful conversion if you only want the JPG copies.
 
 ## Troubleshooting
 
