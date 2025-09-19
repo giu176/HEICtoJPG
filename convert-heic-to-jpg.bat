@@ -156,3 +156,4 @@ if exist "%LOCKDIR%\*.lock" (
 )
 set "%~2=%COUNT%"
 exit /b 0
+
