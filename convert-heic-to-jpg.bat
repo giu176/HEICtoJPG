@@ -1,104 +1,159 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
-rem === Controllo parametri ===
+if /i "%~1"=="_worker" (
+    shift
+    call :Worker "%~1" "%~2" "%~3" "%~4"
+    exit /b %errorlevel%
+)
+
 if "%~1"=="" (
-  echo Uso: %~nx0 "C:\cartella\input" "C:\cartella\output"
-  exit /b 1
-)
-if "%~2"=="" (
-  echo Uso: %~nx0 "C:\cartella\input" "C:\cartella\output"
-  exit /b 1
+    echo Usage: %~nx0 SOURCE_DIR
+    echo.
+    echo Creates a "_jpg" copy of SOURCE_DIR and converts all HEIC files to JPG in parallel.
+    exit /b 1
 )
 
-rem Normalizza percorsi con slash finale rimosso
-set "INROOT=%~f1"
-set "OUTROOT=%~f2"
-if "%INROOT:~-1%"=="\" set "INROOT=%INROOT:~0,-1%"
-if "%OUTROOT:~-1%"=="\" set "OUTROOT=%OUTROOT:~0,-1%"
-
-rem Verifica esistenza input
-if not exist "%INROOT%" (
-  echo Errore: cartella input non trovata: "%INROOT%"
-  exit /b 1
+set "SOURCE=%~f1"
+if not exist "%SOURCE%" (
+    echo [ERROR] Source directory "%SOURCE%" not found.
+    exit /b 1
 )
 
-rem (Opzionale) verifica presenza comando magick
-where /q magick
+for %%I in ("%SOURCE%") do set "DEST=%%~fI_jpg"
+
+if /i "%SOURCE%"=="%DEST%" (
+    echo [ERROR] Source directory already ends with _jpg.
+    exit /b 1
+)
+
+echo [INFO] Copying directory tree to "%DEST%"...
+robocopy "%SOURCE%" "%DEST%" /MIR /NFL /NDL /NJH /NJS /NC /NS >nul
+if errorlevel 8 (
+    echo [ERROR] robocopy failed to mirror the directory.
+    exit /b 1
+)
+
+set "CONVERTER=magick"
+set "MAX_JOBS=%NUMBER_OF_PROCESSORS%"
+if defined HEIC2JPG_MAX_JOBS set "MAX_JOBS=%HEIC2JPG_MAX_JOBS%"
+if not defined MAX_JOBS set "MAX_JOBS=1"
+for /f "delims=" %%J in ("%MAX_JOBS%") do set "MAX_JOBS=%%~J"
+set /a MAX_JOBS+=0 >nul 2>&1
+if %MAX_JOBS% LSS 1 set "MAX_JOBS=1"
+
+where /q "%CONVERTER%"
 if errorlevel 1 (
-  echo Errore: comando "magick" non trovato nel PATH. Installa ImageMagick o aggiungilo al PATH.
-  exit /b 1
+    echo [ERROR] Converter "%CONVERTER%" not found in PATH.
+    exit /b 1
 )
 
-rem Assicurati che la cartella di output esista
-if not exist "%OUTROOT%" mkdir "%OUTROOT%" >nul 2>&1
+echo [INFO] Using %MAX_JOBS% parallel conversion job(s).
 
-echo === Conversione .HEIC -> .jpg ===
-echo Input : "%INROOT%"
-echo Output: "%OUTROOT%"
-echo.
+set "LOCKDIR=%TEMP%\heic2jpg_%RANDOM%%RANDOM%"
+if exist "%LOCKDIR%" rd /s /q "%LOCKDIR%" >nul 2>&1
+md "%LOCKDIR%" 2>nul
+if errorlevel 1 (
+    echo [ERROR] Unable to create temporary directory "%LOCKDIR%".
+    exit /b 1
+)
+set "FAILFLAG=%LOCKDIR%\fail.flag"
+set "JOB_SEQ=0"
+set "HAS_FILES=0"
 
-rem Cerca ricorsivamente .HEIC (maiusc/minusc)
-for /R "%INROOT%" %%F in (*.HEIC *.heic) do (
-  rem Calcola il percorso relativo rispetto alla radice di input
-  call :GetRelativePath "%%~pnF" "%INROOT%" RELPN
-
-  rem Costruisci destinazione: OUTROOT + relativo + .jpg
-  set "DESTFILE=%OUTROOT%\!RELPN!.jpg"
-
-  rem Crea la cartella di destinazione se non esiste
-  for %%D in ("!DESTFILE!") do set "DESTDIR=%%~dpD"
-  if not exist "!DESTDIR!" mkdir "!DESTDIR!" >nul 2>&1
-
-  echo Converto: "%%F"
-  rem Esegui la conversione
-  magick "%%F" "!DESTFILE!" || (
-    echo   ^> Errore nella conversione di "%%F"
-  )
+for /r "%DEST%" %%F in (*.HEIC) do (
+    set "CURRENT_FILE=%%~fF"
+    set "HAS_FILES=1"
+    call :WaitForSlot "%LOCKDIR%" %MAX_JOBS%
+    set /a JOB_SEQ+=1
+    set "LOCKFILE=%LOCKDIR%\job!JOB_SEQ!.lock"
+    type nul >"!LOCKFILE!"
+    start "heic2jpg" /b cmd /c "\"%~f0\" _worker \"!CONVERTER!\" \"!CURRENT_FILE!\" \"!LOCKFILE!\" \"%FAILFLAG%\""
 )
 
-echo.
-echo Fatto.
+call :WaitForAll "%LOCKDIR%"
+
+set "EXITCODE=0"
+if exist "%FAILFLAG%" set "EXITCODE=1"
+
+rd /s /q "%LOCKDIR%" >nul 2>&1
+
+if "!HAS_FILES!"=="0" (
+    echo [INFO] No HEIC files found in destination directory.
+) else (
+    if %EXITCODE% neq 0 (
+        echo [ERROR] Conversion completed with errors. Check messages above.
+    ) else (
+        echo [INFO] Conversion completed successfully.
+    )
+)
+
+exit /b %EXITCODE%
+
+:Worker
+setlocal EnableExtensions EnableDelayedExpansion
+set "CONVERTER=%~1"
+set "SOURCE_FILE=%~2"
+set "LOCKFILE=%~3"
+set "FAILFLAG=%~4"
+set "TARGET_FILE=%~dpn2.jpg"
+
+if not exist "%SOURCE_FILE%" (
+    echo [WARN] Source file "%SOURCE_FILE%" not found by worker.
+    if exist "%LOCKFILE%" del "%LOCKFILE%" >nul 2>&1
+    exit /b 0
+)
+
+if exist "%TARGET_FILE%" (
+    echo [INFO] Skipping "%SOURCE_FILE%" because "%TARGET_FILE%" already exists.
+    del "%SOURCE_FILE%" >nul 2>&1
+    if exist "%LOCKFILE%" del "%LOCKFILE%" >nul 2>&1
+    exit /b 0
+)
+
+"%CONVERTER%" "%SOURCE_FILE%" "%TARGET_FILE%"
+set "RESULT=%ERRORLEVEL%"
+if %RESULT% neq 0 (
+    echo [ERROR] Conversion failed for "%SOURCE_FILE%". Exit code: %RESULT%
+    if not exist "%FAILFLAG%" (echo failure>"%FAILFLAG%")
+) else (
+    del "%SOURCE_FILE%" >nul 2>&1
+)
+
+if exist "%LOCKFILE%" del "%LOCKFILE%" >nul 2>&1
+
 endlocal
-exit /b
+exit /b %RESULT%
 
-:GetRelativePath
-setlocal EnableDelayedExpansion
-set "SRC=%~1"
-set "BASE=%~2"
-set "ORIG=%~1"
-if "!BASE:~-1!"=="\" set "BASE=!BASE:~0,-1!"
-set "SRC_UP=%SRC%"
-set "BASE_UP=%BASE%"
-call :ToUpper SRC_UP
-call :ToUpper BASE_UP
-:rel_loop
-if "!BASE_UP!"=="" goto rel_success
-if "!SRC_UP!"=="" goto rel_fail
-if not "!SRC_UP:~0,1!"=="!BASE_UP:~0,1!" goto rel_fail
-set "SRC_UP=!SRC_UP:~1!"
-set "BASE_UP=!BASE_UP:~1!"
-set "SRC=!SRC:~1!"
-goto rel_loop
-
-:rel_success
-if "!SRC:~0,1!"=="\" set "SRC=!SRC:~1!"
-goto rel_finish
-
-:rel_fail
-for %%P in ("!ORIG!") do set "SRC=%%~nxP"
-goto rel_finish
-
-:rel_finish
-endlocal & set "%~3=%SRC%"
-exit /b
-
-:ToUpper
-setlocal EnableDelayedExpansion
-set "_VAL=!%~1!"
-for %%A in (a=A b=B c=C d=D e=E f=F g=G h=H i=I j=J k=K l=L m=M n=N o=O p=P q=Q r=R s=S t=T u=U v=V w=W x=X y=Y z=Z) do (
-  for /F "tokens=1,2 delims==" %%B in ("%%A") do set "_VAL=!_VAL:%%B=%%C!"
+:WaitForSlot
+set "LOCKDIR=%~1"
+set "MAX=%~2"
+:WaitForSlotLoop
+call :CountLocks "%LOCKDIR%" CURRENT_JOBS
+if !CURRENT_JOBS! GEQ !MAX! (
+    timeout /t 1 /nobreak >nul
+    goto :WaitForSlotLoop
 )
-endlocal & set "%~1=%_VAL%"
-exit /b
+exit /b 0
+
+:WaitForAll
+set "LOCKDIR=%~1"
+:WaitForAllLoop
+call :CountLocks "%LOCKDIR%" REMAINING_JOBS
+if !REMAINING_JOBS! GTR 0 (
+    timeout /t 1 /nobreak >nul
+    goto :WaitForAllLoop
+)
+exit /b 0
+
+:CountLocks
+set "LOCKDIR=%~1"
+set /a COUNT=0
+if exist "%LOCKDIR%\*.lock" (
+    for %%L in ("%LOCKDIR%\*.lock") do (
+        if exist "%%~fL" set /a COUNT+=1
+    )
+)
+set "%~2=%COUNT%"
+exit /b 0
 
