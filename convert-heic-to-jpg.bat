@@ -68,7 +68,8 @@ for /r "%DEST%" %%F in (*.HEIC) do (
     set /a JOB_SEQ+=1
     set "LOCKFILE=%LOCKDIR%\job!JOB_SEQ!.lock"
     type nul >"!LOCKFILE!"
-    start "heic2jpg" /b cmd /c "\"%~f0\" _worker \"!CONVERTER!\" \"!CURRENT_FILE!\" \"!LOCKFILE!\" \"%FAILFLAG%\""
+    start "" /b cmd /c ""%~f0" _worker "!CONVERTER!" "!CURRENT_FILE!" "!LOCKFILE!" "%FAILFLAG%""
+
 )
 
 call :WaitForAll "%LOCKDIR%"
@@ -156,4 +157,3 @@ if exist "%LOCKDIR%\*.lock" (
 )
 set "%~2=%COUNT%"
 exit /b 0
-
