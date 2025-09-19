@@ -5,47 +5,46 @@ HEIC photos into JPG images while keeping the original folder structure intact.
 
 ## Batch script
 
-The [`convert-heic-to-jpg.bat`](convert-heic-to-jpg.bat) script walks the source
-folder recursively, mirrors the directory tree into the destination, and calls a
-command-line converter for each `.heic` file it finds. By default it uses the
-[`magick`](https://imagemagick.org/script/magick.php) command that ships with
-ImageMagick 7, but you can supply another tool if you prefer (for example,
-`heif-convert`).
+The [`convert-heic-to-jpg.bat`](convert-heic-to-jpg.bat) script clones the source
+folder, converts every `.HEIC` file within the clone to `.jpg` using the
+[`magick`](https://imagemagick.org/script/magick.php) command, and removes the
+intermediate HEIC files once each conversion completes. The conversion work is
+parallelised based on the number of CPU cores that Windows reports.
 
 ```
-convert-heic-to-jpg.bat SOURCE_DIR [DEST_DIR] [CONVERTER]
+convert-heic-to-jpg.bat SOURCE_DIR
 ```
 
 - **SOURCE_DIR** – Directory that contains the HEIC files you want to convert.
-- **DEST_DIR** – Output root folder. If omitted, JPG files are written next to
-  the source HEIC files.
-- **CONVERTER** – Optional command or full path to the executable that should
-  perform the conversion. Defaults to `magick`.
+  A sibling directory named `SOURCE_DIR_jpg` is created automatically to host
+  the converted images.
+
+### Behaviour
+
+- The script mirrors the complete directory tree from `SOURCE_DIR` into the new
+  `_jpg` directory using `robocopy`.
+- Each HEIC file in the new directory is converted to JPG via `magick` and the
+  HEIC copy is deleted immediately after a successful conversion to minimise
+  disk usage.
+- Multiple conversions run in parallel (one per logical CPU by default) to
+  reduce the overall processing time. Set the `HEIC2JPG_MAX_JOBS` environment
+  variable if you want to override the level of parallelism.
+- If a conversion fails, the script keeps the `.HEIC` file in place, reports the
+  error, and sets a non-zero exit code once all conversions finish.
 
 ### Prerequisites
 
 - Windows 10/11 with Command Prompt.
-- A converter capable of reading HEIC files (ImageMagick, `heif-convert`, etc.)
-  installed and available on `PATH`, or provide its full path as `CONVERTER`.
+- [ImageMagick](https://imagemagick.org/) installed and available on `PATH`
+  (for the `magick` command).
 
-### Examples
+### Example
 
-Convert an entire photo archive in place:
-
-```
-convert-heic-to-jpg.bat "D:\Photos"
-```
-
-Mirror the converted JPGs into a separate folder using ImageMagick:
+Convert an entire photo archive, writing the resulting `*_jpg` directory next to
+the original:
 
 ```
-convert-heic-to-jpg.bat "D:\Photos\HEIC" "D:\Photos\JPG" magick
-```
-
-Use a custom converter executable:
-
-```
-convert-heic-to-jpg.bat "D:\Photos" "D:\Photos\JPG" "C:\Tools\heif-convert.exe"
+convert-heic-to-jpg.bat "D:\Photos\Holiday"
 ```
 
 The script skips files that already have a JPG counterpart in the destination.
