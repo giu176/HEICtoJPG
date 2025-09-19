@@ -69,6 +69,7 @@ for /r "%DEST%" %%F in (*.HEIC) do (
     set "LOCKFILE=%LOCKDIR%\job!JOB_SEQ!.lock"
     type nul >"!LOCKFILE!"
     start "" /b cmd /c ""%~f0" _worker "!CONVERTER!" "!CURRENT_FILE!" "!LOCKFILE!" "%FAILFLAG%""
+
 )
 
 call :WaitForAll "%LOCKDIR%"
